@@ -6,6 +6,16 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
+# Streamlit hot updates can retain v1 modules while replacing app.py.
+# Upgrade these legacy modules once; never reload an active v2 worker on each rerun.
+import importlib
+import db as _db_module
+if not hasattr(_db_module, "anonymize_lead"):
+    importlib.reload(_db_module)
+import agent as _agent_module
+if not hasattr(_agent_module, "eligible"):
+    importlib.reload(_agent_module)
+
 from db import init_db, add_lead, list_leads, get_lead, list_interactions, list_actions, save_context, schedule_meeting, setting, set_setting, rows, anonymize_lead
 from enrichment import enrich, fetch_company
 from workflow import start_worker, run_due, parse_date
