@@ -24,3 +24,7 @@ Consulta real ao Wikidata Q2283 executada com sucesso: nome Microsoft, descriç�
 ## Limites dos testes
 
 A suíte usa mocks de LLM, portanto não mede acurácia estatística nem substitui teste publicado com chave ativa. Não houve teste de carga, calendário externo, WhatsApp real ou PostgreSQL. A consulta pública cobre organização; dados profissionais individuais permanecem declarados. Worker depende do processo ativo. Conformidade jurídica integral e disponibilidade contínua não são alegadas.
+
+## Verificação publicada da versão 2
+
+A aplicação carregou com os registros antigos preservados após tratar módulos v1 retidos no hot deploy. No ambiente publicado: consulta Wikidata Q2283 retornou nome/descrição/sites; enriquecimento gravou proveniência; a chamada real ao Claude gerou mensagem com fato público atribuído; T-14 registrou uma única saída e repetição foi bloqueada; opt-out mudou o estado e nova tentativa retornou “Opt-out: novas mensagens estão bloqueadas.” O teste foi feito apenas com persona sintética. A automação contínua de relógio real foi deixada desabilitada; avaliador pode habilitar com a data do evento. Não foi feito teste de duração do worker ou suspensão do host.

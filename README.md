@@ -65,3 +65,5 @@ Testes usam bancos temporários e mocks de LLM. Cobrem defeitos da auditoria, mi
 ## Limites explícitos
 
 WhatsApp é uma caixa de saída **simulada**; não há credenciais de canal nem envios reais. Calendário é um registro local, sem reserva externa. Fonte pública cobre a **organização**, não valida todos os dados pessoais/profissionais. SQLite é a única opção implementada: PostgreSQL exige migração e driver, não basta trocar uma URL. Configure armazenamento persistente e backup antes de operar fora da demonstração; exportação JSON do avaliador não é backup completo. Dados existentes são migrados sem apagar histórico. Alteração de fonte/regra e idempotência são rastreáveis.
+
+Se uma persona já estiver com reunião ou opt-out, use **Criar cópia sintética para novo teste** na Demo guiada. O original permanece preservado; a cópia começa com perfil não enriquecido e e-mail de teste novo.

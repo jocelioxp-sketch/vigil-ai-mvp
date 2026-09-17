@@ -1,6 +1,7 @@
 import os
 import json
 import hmac
+from uuid import uuid4
 from html import escape
 from datetime import datetime, timedelta, timezone
 import pandas as pd
@@ -119,6 +120,13 @@ with tabs[0]:
         labels = {f"#{x['id']} · {x['name']} — {x['company'] or 'Empresa não informada'}": x['id'] for x in leads}
         label = st.selectbox("Escolha um lead para a demonstração", list(labels.keys()))
         lead = get_lead(labels[label])
+        if lead['synthetic'] and (lead['suppressed'] or lead['meeting_scheduled']):
+            st.caption("Esta persona já concluiu o fluxo ou solicitou opt-out. Para repetir o teste, crie uma nova cópia; o histórico e o bloqueio original serão preservados.")
+            if st.button("Criar cópia sintética para novo teste"):
+                profile = {k: lead.get(k) for k in ['name','phone','role','company','sector','company_size','linkedin_url','security_interest']}
+                profile.update(name=lead['name'][:80]+" (novo teste)", email=f"demo-{uuid4().hex[:12]}@example.invalid", synthetic=True)
+                add_lead(profile)
+                st.rerun()
 
         a, b, c, d = st.columns(4)
         a.metric("Lead score", f"{lead['lead_score'] or 0}/100")

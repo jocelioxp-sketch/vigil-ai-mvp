@@ -27,3 +27,5 @@ Escolha Persona Demo Microsoft; seu emprego é fictício. Fonte Empresa pública
 ## Limites
 
 Dados e canais sintéticos devem permanecer identificados. Evidências do teste não comprovam 70% de comparecimento real. O worker usa relógio real apenas quando habilitado e enquanto o processo está ativo. Não há envio externo ou garantia de disponibilidade contínua neste host.
+
+Se uma persona já estiver com reunião ou opt-out, use **Criar cópia sintética para novo teste** na Demo guiada. O original permanece preservado; a cópia começa com perfil não enriquecido e e-mail de teste novo.
