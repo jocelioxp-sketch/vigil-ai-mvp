@@ -155,7 +155,7 @@ def save_context(lead_id, attended, interest):
     with transaction() as c:
         lead=get_lead(lead_id,c)
         status=lead['status']
-        if not lead['suppressed'] and not lead['meeting_scheduled'] and status!='FOLLOW_UP_QUENTE':
+        if not lead['suppressed'] and not lead['meeting_scheduled'] and status not in ('FOLLOW_UP_QUENTE', 'NAO_COMPARECERA'):
             status='PRESENTE' if attended else ('CONFIRMADO' if lead['attendance_confirmed'] else 'ENRIQUECIDO' if lead['enriched_at'] else 'INSCRITO')
         _update(c,lead_id,dict(attended=int(attended),demo_interest=interest[:1000],status=status))
         action(c,lead_id,'EVENT_CONTEXT','Presença e interesse registrados pelo operador.')
@@ -166,6 +166,8 @@ def schedule_meeting(lead_id, when):
         raise ValueError('Informe data futura com fuso, ex.: 2026-10-20T14:00:00-03:00.')
     with transaction() as c:
         lead=get_lead(lead_id,c)
+        if lead['review_required']:
+            raise ValueError('Esclareça a resposta pendente antes de registrar a reunião.')
         if lead['suppressed'] or lead['status']!='FOLLOW_UP_QUENTE':
             raise ValueError('É necessário interesse em reunião e ausência de opt-out.')
         _update(c,lead_id,dict(meeting_scheduled=1,meeting_datetime=dt.isoformat(),status='REUNIAO_AGENDADA'))

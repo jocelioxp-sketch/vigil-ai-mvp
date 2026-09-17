@@ -51,6 +51,8 @@ python -m unittest discover -s tests -v
 
 Testes usam bancos temporários e mocks de LLM. Cobrem defeitos da auditoria, migração de dados, opt-out durante geração, JSON inválido, idempotência, incerteza, fonte indisponível e estados. Não chamam a API paga nem enviam mensagens externas. Ver [VALIDATION.md](VALIDATION.md).
 
+Recusas permanecem bloqueadas mesmo após salvar contexto e impedem mensagens manuais e automáticas nas duas fases. Uma nova resposta esclarecedora pode atualizar a decisão. Revisão pendente também impede registrar reunião; primeiro interprete uma resposta inequívoca de interesse.
+
 ## Arquivos
 
 - [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md): requisitos, arquitetura, decisões e limites.

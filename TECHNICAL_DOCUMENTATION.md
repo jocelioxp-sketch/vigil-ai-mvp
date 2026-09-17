@@ -45,6 +45,8 @@ Chaves estrangeiras são ativadas por conexão. A migração conserva dados lega
 
 O estado comercial é separado de `suppressed`: reanálise e presença não removem opt-out. Recusa pré-evento zera confirmação. Reunião e opt-out não são reabertos por enriquecimento. Respostas incertas pausam a régua até uma nova resposta esclarecedora. O histórico e as ações podem ser baixados em JSON na aba Evidências.
 
+Salvar contexto também preserva recusa explícita. A elegibilidade compartilhada bloqueia mensagens manuais e automáticas, pré e pós-evento, até uma resposta esclarecedora atualizar a decisão. Registrar reunião exige ausência de revisão pendente. A detecção determinística de opt-out ignora formas negadas como “não quero sair”; o texto original segue ao classificador. Essa heurística não garante compreensão de toda formulação linguística; falhas de interpretação continuam pausando a régua.
+
 ## 2. Stack e justificativas
 
 | Componente | Escolha e motivo |

@@ -33,8 +33,6 @@ def due_rule(lead,clock,event):
             return None
     try: eligible(lead,phase)
     except ValueError: return None
-    if phase=='POS_EVENTO' and lead['status']=='NAO_COMPARECERA':
-        return None
     # Already confirmed leads only receive logistics near the event.
     if phase=='PRE_EVENTO' and lead['attendance_confirmed'] and key in ('T14','T7','T3'):
         return None

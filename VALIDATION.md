@@ -4,7 +4,9 @@ Data: 17/09/2026. Base anterior: 4eba3f18c54a3d92e9b2b794e9d1763193565119.
 
 ## Evidência local
 
-`python -m unittest discover -s tests -v`: **27 testes passaram**. Bancos temporários; nenhuma chamada paga durante a suíte. Sintaxe de todos os módulos compilada com sucesso.
+`python -m unittest discover -s tests -v`: **32 testes passaram** na revisão final de 17/09/2026, sobre a base 27e316079a034688a9fe421cf4486d7e810f108b mais estas correções. Bancos temporários; nenhuma chamada paga durante a suíte.
+
+Cinco regressões adicionais cobrem: recusa preservada após salvar contexto, bloqueio manual/automático nas duas fases, retomada após esclarecimento, negação de opt-out encaminhada intacta ao classificador, descadastro explícito independente da API e agendamento bloqueado até resolver revisão pendente. A interpretação do LLM nesses testes é simulada. Esta revisão não repetiu o teste completo publicado nem uma chamada real ao Claude; a evidência publicada abaixo corresponde à verificação anterior.
 
 Cobertura: pré-condição de enriquecimento; opt-out sem depender de IA; persistência do bloqueio; recusa após confirmação; baixa confiança; reunião preservada após reanálise/edição; validação de data; integridade referencial; e-mail; intenção no histórico; falha da API; origem pública; indisponibilidade da fonte; rejeição de URL arbitrária; idempotência; janelas da régua; ausência de alegações livres; JSON inválido; opt-out concorrente à geração; migração do banco antigo; anonimização; orçamento de chamadas; execução concorrente; exigência de consentimento/fonte; contexto de classificação e fluxo de interface com AppTest.
 

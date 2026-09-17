@@ -23,6 +23,9 @@ Escolha Persona Demo Microsoft; seu emprego é fictício. Fonte Empresa pública
 - Reanalisar lead com reunião: estado de reunião permanece.
 - Réguas → data do evento → T-7 → executar em lead não confirmado. Repetir não deve duplicar. Confirmado pula T-7, mas pode receber T-1. Opt-out/reunião não recebem mensagens.
 - D+1 para lead ausente deve mencionar ausência, não presença nem demo vista.
+- Após “Não poderei participar”, salvar contexto não remove a recusa. Geração manual e réguas permanecem bloqueadas nas duas fases até uma nova resposta esclarecedora.
+- “Não quero sair da lista. Confirmo minha presença.” deve seguir para interpretação com IA, sem opt-out automático pela palavra “sair”. Uma solicitação explícita de descadastro continua sendo bloqueada sem depender da IA.
+- Após interesse em reunião seguido de resposta ambígua, tentar marcar reunião deve ser bloqueado. Interprete uma nova resposta inequívoca de interesse antes de registrar o horário.
 
 ## Limites
 

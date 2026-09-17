@@ -171,4 +171,59 @@ class RegressionTests(unittest.TestCase):
         self.assertIn('POS_EVENTO',observed[0]['messages'][0]['content'])
         self.assertEqual(self.current()['status'],'FOLLOW_UP_QUENTE')
 
+    def test_27_refusal_survives_context_and_blocks_all_sends(self):
+        self.enrich();self.reply('RECUSA')
+        date=datetime.now(timezone.utc)+timedelta(days=30)
+        for attended in (False,True):
+            db.save_context(self.lead,attended,'SOC 2')
+            self.assertEqual(self.current()['status'],'NAO_COMPARECERA')
+            with patch.object(agent,'generate_message') as generate:
+                for phase in ('PRE_EVENTO','POS_EVENTO'):
+                    with self.assertRaises(ValueError):agent.send_simulated(self.current(),phase)
+                self.assertEqual(workflow.run_due(date-timedelta(days=7),date,True),[])
+                self.assertEqual(workflow.run_due(date+timedelta(days=1),date,True),[])
+                generate.assert_not_called()
+
+    def test_28_refusal_can_be_clarified(self):
+        self.enrich();self.reply('RECUSA');db.save_context(self.lead,False,'SOC 2')
+        self.reply('CONFIRMA')
+        with patch.object(agent,'generate_message',return_value='Presença confirmada'):
+            agent.send_simulated(self.current(),'PRE_EVENTO')
+        self.assertEqual(self.current()['status'],'CONFIRMADO')
+
+    def test_29_negated_optout_reaches_classifier_unchanged(self):
+        replies=['Não quero sair da lista. Confirmo minha presença.',
+                 'Não desejo parar de receber mensagens.',
+                 'Não me remova da lista.']
+        for reply in replies:
+            observed=[]
+            def create(**kwargs):
+                observed.append(kwargs['messages'][0]['content'])
+                return SimpleNamespace(content=[SimpleNamespace(text=json.dumps(dict(intent='CONFIRMA',confidence=1,next_action='confirmar')))])
+            client=SimpleNamespace(messages=SimpleNamespace(create=create))
+            with self.subTest(reply=reply), patch.object(agent,'_client',return_value=client):
+                result=agent.receive_reply(self.current(),reply)
+                self.assertEqual(result['intent'],'CONFIRMA')
+                self.assertFalse(self.current()['suppressed'])
+                self.assertIn(reply,observed[0])
+
+    def test_30_explicit_optout_still_works_without_api(self):
+        for reply in ['SAIR','Por favor, não me envie mais mensagens.',
+                      'Remova meu contato da lista.',
+                      'Não quero sair do evento, mas não quero receber mensagens.']:
+            with self.subTest(reply=reply), patch.object(agent,'_client') as client:
+                self.assertEqual(agent.classify_reply(self.current(),reply)['intent'],'OPT_OUT')
+                client.assert_not_called()
+
+    def test_31_review_blocks_meeting_until_clarification(self):
+        self.reply('INTERESSE_REUNIAO');self.reply('DUVIDA',0.1)
+        when=(datetime.now(timezone.utc)+timedelta(days=30)).isoformat()
+        with self.assertRaisesRegex(ValueError,'Esclareça'):db.schedule_meeting(self.lead,when)
+        self.assertFalse(self.current()['meeting_scheduled'])
+        self.assertFalse(any(a['action_type']=='MEETING' for a in db.list_actions(self.lead)))
+        self.reply('INTERESSE_REUNIAO')
+        db.schedule_meeting(self.lead,when)
+        self.assertTrue(self.current()['meeting_scheduled'])
+        self.assertFalse(self.current()['review_required'])
+
 if __name__=='__main__': unittest.main()
