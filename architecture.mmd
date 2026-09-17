@@ -1,16 +1,12 @@
-flowchart LR
-    A[Landing / Formulário] --> B[Streamlit App]
-    B --> C[(Banco SQL)]
-    B --> D[Motor de Enriquecimento]
-    D --> C
-    B --> E[Agente Claude]
-    C --> E
-    E --> F[Adaptador WhatsApp / E-mail]
-    F --> G[Lead]
-    G --> F
-    F --> E
-    E --> C
-    B --> H[Dashboard]
-    C --> H
-    E --> I[Agendamento]
-    I --> C
+flowchart TD
+  A[Captação] --> B[(SQLite)]
+  B --> C[Enriquecimento com origem]
+  C --> D[Wikidata público]
+  C --> B
+  B --> E[Regras temporais e estado]
+  E --> F[Claude estruturado]
+  F --> G[Validação e supressão]
+  G --> H[Caixa de saída simulada]
+  H --> B
+  I[Respostas simuladas] --> F
+  B --> J[Dashboard e exportação]

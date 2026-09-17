@@ -1,49 +1,67 @@
-# Vigil.AI Event Conversion Agent — MVP
+# Vigil.AI — Event Conversion Agent
 
-MVP para o case de AI Engineer da Pareto. O produto demonstra um agente de IA capaz de operar um funil B2B de evento: **captação → enriquecimento → engajamento pré-evento → presença → follow-up → reunião comercial**.
+**Aplicação:** https://vigil-ai-mvp.streamlit.app/  
+**Entrega MBA AI Leader:** Jocélio de Souza Santos · case Vigil Summit.
 
-## Stack
-- **Python + Streamlit**: interface de demonstração e dashboard no mesmo projeto.
-- **Anthropic Claude**: geração de mensagens e classificação de respostas.
-- **SQLAlchemy + SQLite (demo)**: banco relacional simples e auditável. Em produção, `DATABASE_URL` pode apontar para Postgres/Supabase.
-- **Deploy sugerido**: Streamlit Community Cloud, Render ou Railway.
+MVP testável para captação → enriquecimento → confirmação → presença → follow-up → reunião. Claude interpreta respostas e seleciona o tema contextual; o motor determinístico aplica estados, bloqueios, réguas e textos com fatos controlados.
 
-## Como rodar
+## Avaliar em 5 minutos
+
+1. Abra **Captação** → **Adicionar personas sintéticas de exemplo**. Só adiciona as ausentes.
+2. Em **Demo guiada**, escolha uma persona. Execute **Analisar lead · Enriquecer e pontuar** no modo sintético.
+3. Gere uma mensagem pré-evento; responda “Confirmo minha presença”. Veja status, confiança e histórico.
+4. Em **Contexto pós-evento**, marque presença e interesse observado; salve.
+5. Em **Demo guiada**, selecione pós-evento, gere follow-up e responda “Quero agendar uma reunião”.
+6. Em **Contexto pós-evento**, informe data futura **com fuso** e marque a reunião. Isso registra a reunião; não cria convite externo.
+7. Confira o **Dashboard** e baixe o JSON na aba **Evidências**.
+
+### Conferir fonte pública real
+
+Escolha “Persona Demo Microsoft” (pessoa fictícia; nenhum vínculo profissional real afirmado). Selecione **Empresa pública (Wikidata)**, informe **Q2283**, consulte a fonte, confira a empresa e marque a confirmação. Execute a análise. Descrição, sites, URL e data da consulta ficam registrados; vínculo, cargo, porte e interesses permanecem declarados. Se a fonte falhar, não há validação pública inventada. Dados Wikidata podem conter erros e devem ser conferidos.
+
+### Conferir regras e automação
+
+Na aba **Réguas**, informe início do evento com fuso e avance T-14/T-7/T-3/T-1/D+0/D+1/D+3/D+7. A simulação só atua sobre personas sintéticas, com histórico separado da execução de relógio real. Executar a mesma janela de novo não duplica sua mensagem. Leads confirmados não recebem novos pedidos de confirmação; opt-out e reuniões encerram a comunicação.
+
+Para execução automática, salve a data e habilite o checkbox. O worker processa a cada minuto **enquanto o processo estiver ativo**. Não garante execução quando a hospedagem suspende a aplicação. Para serviço contínuo, rode `python workflow.py` em processo supervisionado com o mesmo SQLite em armazenamento persistente.
+
+## Executar localmente
+
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env       # Windows (PowerShell): Copy-Item .env.example .env
-# edite .env e adicione sua ANTHROPIC_API_KEY
+cp .env.example .env
+# Configure sua própria ANTHROPIC_API_KEY no .env.
 python seed.py
 streamlit run app.py
 ```
 
-> Nunca versione sua chave real de API. O arquivo `.env.example` contém apenas placeholders seguros.
+Windows: `.venv\Scripts\activate` e `Copy-Item .env.example .env`.
 
-## Fluxo de demonstração
-1. Abra **Captação** e cadastre um lead ou rode `python seed.py`.
-2. Em **Agente**, selecione o lead e clique em **Enriquecer / pontuar**.
-3. Gere uma mensagem `PRE_EVENTO` com Claude.
-4. Simule uma resposta como “Confirmo presença”. O agente classifica e atualiza o status.
-5. Em **Demo pós-evento**, marque o lead como presente e registre um interesse observado.
-6. Volte ao **Agente** e gere uma mensagem `POS_EVENTO`.
-7. Simule “Quero agendar uma conversa”.
-8. Em **Demo pós-evento**, marque a reunião como agendada.
-9. Mostre o **Dashboard** com a atualização do funil.
+No Streamlit Cloud, configure `ANTHROPIC_API_KEY` em **Settings → Secrets**, com sintaxe TOML: `ANTHROPIC_API_KEY = "sua-chave"`. Nunca inclua credenciais no GitHub. O modelo padrão é `claude-sonnet-4-5`; `ANTHROPIC_MODEL` permite configuração explícita. Uma chave ativa e limite disponível são necessários para testar o LLM.
 
-## Estrutura
-- `app.py`: interface e dashboard
-- `agent.py`: LLM, mensagens, classificação e ações
-- `db.py`: persistência e histórico
-- `seed.py`: personas sintéticas
-- `schema.sql`: modelo relacional
-- `TECHNICAL_DOCUMENTATION.md`: documentação técnica e decisões
-- `docs/architecture.mmd`: diagrama Mermaid
+O padrão é `DEMO_MODE=true`: cadastros sintéticos com e-mail `@example.invalid` ou `.demo`. Para trabalhar com dados reais, é obrigatório configurar `DEMO_PASSWORD` e desativar DEMO_MODE. Senha não substitui uma solução de autenticação/segregação de produção. Não use dados reais neste ambiente público de avaliação.
 
-## Limitações assumidas no MVP
-- Enriquecimento externo real foi substituído por enriquecimento determinístico com dados declarados/públicos simulados. A interface está preparada para substituir essa função por Clearbit/Apollo/Proxycurl ou outra fonte autorizada.
-- Envio de WhatsApp é simulado e registrado em `interactions`. Em produção, o adaptador seria WhatsApp Business API/Twilio.
-- Agendamento é marcado no sistema. Em produção, integrar Calendly/Google Calendar.
+## Testes
 
-Essas decisões reduzem risco operacional para o case, preservando arquitetura evolutiva e demonstração ponta a ponta.
+```bash
+python -m unittest discover -s tests -v
+```
+
+Testes usam bancos temporários e mocks de LLM. Cobrem defeitos da auditoria, migração de dados, opt-out durante geração, JSON inválido, idempotência, incerteza, fonte indisponível e estados. Não chamam a API paga nem enviam mensagens externas. Ver [VALIDATION.md](VALIDATION.md).
+
+## Arquivos
+
+- [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md): requisitos, arquitetura, decisões e limites.
+- [DEMO_SCRIPT.md](DEMO_SCRIPT.md): roteiro e casos de borda.
+- [architecture.mmd](architecture.mmd): arquitetura.
+- `app.py`: interface; `agent.py`: LLM e comunicação controlada.
+- `workflow.py`: elegibilidade, execução temporal e deduplicação.
+- `enrichment.py`: consulta pública com proveniência.
+- `db.py` e [schema.sql](schema.sql): SQLite, migração e estados.
+- `seed.py`: personas; `tests/`: regressões.
+
+## Limites explícitos
+
+WhatsApp é uma caixa de saída **simulada**; não há credenciais de canal nem envios reais. Calendário é um registro local, sem reserva externa. Fonte pública cobre a **organização**, não valida todos os dados pessoais/profissionais. SQLite é a única opção implementada: PostgreSQL exige migração e driver, não basta trocar uma URL. Configure armazenamento persistente e backup antes de operar fora da demonstração; exportação JSON do avaliador não é backup completo. Dados existentes são migrados sem apagar histórico. Alteração de fonte/regra e idempotência são rastreáveis.

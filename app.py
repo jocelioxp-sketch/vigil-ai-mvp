@@ -1,13 +1,38 @@
 import os
+import json
+import hmac
+from html import escape
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
-from db import init_db, add_lead, list_leads, get_lead, update_lead, list_interactions
+from db import init_db, add_lead, list_leads, get_lead, list_interactions, list_actions, save_context, schedule_meeting, setting, set_setting, rows, anonymize_lead
+from enrichment import enrich, fetch_company
+from workflow import start_worker, run_due, parse_date
+from seed import seed
 from agent import enrich_locally, send_simulated, receive_reply
 
 load_dotenv()
 init_db()
 st.set_page_config(page_title="Vigil.AI | Event Conversion Agent", page_icon="🛡️", layout="wide", initial_sidebar_state="collapsed")
+
+password = os.getenv("DEMO_PASSWORD", "")
+if os.getenv("DEMO_MODE", "true").lower() != "true" and not password:
+    st.error("Configure uma senha de avaliação antes de habilitar cadastro de dados reais.")
+    st.stop()
+if password:
+    entered = st.text_input("Senha de avaliação", type="password")
+    if not hmac.compare_digest(entered, password):
+        st.info("Informe a senha de avaliação para acessar.")
+        st.stop()
+
+@st.cache_resource
+def worker():
+    return start_worker()
+worker()
+
+if "notice" in st.session_state:
+    st.success(st.session_state.pop("notice"))
 
 st.markdown("""
 <style>
@@ -67,16 +92,19 @@ with st.expander("▶ Roteiro rápido para o avaliador", expanded=False):
 6. Retorne à demo, gere o follow-up e simule **“Quero agendar uma conversa”**.
 7. Marque a reunião e confira os indicadores em **Dashboard**.
 
-> WhatsApp, enriquecimento externo e agenda são simulados intencionalmente neste MVP; as decisões e interações ficam registradas para auditoria.
+> WhatsApp e convite de calendário são simulados. A consulta pública da empresa é real quando selecionada. Personas fictícias e dados declarados ficam identificados.
 """)
 
-tabs = st.tabs(["✨ Demo guiada", "📊 Dashboard", "➕ Captação", "🎟️ Contexto pós-evento"])
+tabs = st.tabs(["✨ Demo guiada", "📊 Dashboard", "➕ Captação", "🎟️ Contexto pós-evento", "⏱️ Réguas", "🔎 Evidências"])
 
 with tabs[0]:
     st.subheader("Demonstração guiada do agente")
     leads = list_leads()
     if not leads:
-        st.info("Ainda não há leads. Use a aba Captação ou execute `python seed.py` para carregar as personas sintéticas.")
+        st.info("Carregue as personas sintéticas para iniciar a avaliação.")
+        if st.button("Carregar personas de demonstração"):
+            seed()
+            st.rerun()
     else:
         labels = {f"#{x['id']} · {x['name']} — {x['company'] or 'Empresa não informada'}": x['id'] for x in leads}
         label = st.selectbox("Escolha um lead para a demonstração", list(labels.keys()))
@@ -94,11 +122,30 @@ with tabs[0]:
             p2.markdown(f"**Setor:** {lead['sector'] or '—'}  \n**Funcionários:** {lead['company_size'] or '—'}  \n**Interesse:** {lead['security_interest'] or '—'}")
 
         st.markdown("#### 1. Entender e priorizar")
+        mode = st.radio("Fonte do enriquecimento", ["Persona sintética", "Empresa pública (Wikidata)"], horizontal=True)
+        qid = None
+        source_confirmed = False
+        if mode == "Empresa pública (Wikidata)":
+            st.caption("Verifica descrição e site da empresa, sem comprovar vínculo, cargo ou porte do lead. Para a persona Microsoft: Q2283.")
+            qid = st.text_input("Identificador Wikidata da empresa", value=lead.get("source_qid") or "", key=f"qid_{lead['id']}")
+            if st.button("Consultar fonte pública"):
+                try:
+                    st.session_state["source_preview"] = fetch_company(qid)
+                except Exception:
+                    st.error("Não foi possível consultar a fonte. Confira o identificador ou tente mais tarde.")
+            preview = st.session_state.get("source_preview", {})
+            if preview.get("qid") == qid.strip().upper():
+                st.json(preview)
+                source_confirmed = st.checkbox("Confirmei que esta fonte corresponde à empresa selecionada")
         if st.button("Analisar lead · Enriquecer e pontuar", type="primary", use_container_width=True):
-            summary, score = enrich_locally(lead)
-            st.success(f"Análise concluída · Lead score {score}/100")
-            st.info(summary)
-            st.rerun()
+            try:
+                summary, score = enrich(lead['id'], qid if mode.startswith("Empresa") else None, source_confirmed)
+                st.session_state["notice"] = f"Análise concluída: {score}/100. Origem dos dados registrada."
+                st.rerun()
+            except ValueError as e:
+                st.error(str(e))
+            except Exception:
+                st.error("Fonte indisponível. Nenhum enriquecimento público foi inventado.")
         if lead.get('enrichment_summary'):
             st.markdown("**Por que o agente priorizou este lead?**")
             st.info(lead['enrichment_summary'])
@@ -111,9 +158,9 @@ with tabs[0]:
             try:
                 msg = send_simulated(get_lead(lead['id']), phase)
                 st.success("Mensagem gerada e registrada no histórico.")
-                st.markdown(f'<div class="chat-out"><span class="small-muted">Vigil.AI · WhatsApp simulado</span><br>{msg}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="chat-out"><span class="small-muted">Vigil.AI · WhatsApp simulado</span><br>{escape(msg)}</div>', unsafe_allow_html=True)
             except Exception as e:
-                st.error(f"Não foi possível gerar a mensagem: {e}")
+                st.error(str(e) if isinstance(e, ValueError) else "Serviço de IA indisponível. Confira a configuração ou tente novamente.")
 
         interactions = list_interactions(lead['id'])
         if interactions:
@@ -122,7 +169,7 @@ with tabs[0]:
             for item in recent:
                 css = "chat-out" if item.get("direction") == "OUTBOUND" else "chat-in"
                 who = "Vigil.AI" if item.get("direction") == "OUTBOUND" else lead['name']
-                st.markdown(f'<div class="{css}"><span class="small-muted">{who}</span><br>{item.get("content", "")}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="{css}"><span class="small-muted">{escape(who)}</span><br>{escape(item.get("content", ""))}</div>', unsafe_allow_html=True)
 
         st.divider()
         st.markdown("#### 3. Simular resposta e observar a decisão")
@@ -138,8 +185,7 @@ with tabs[0]:
                     result = receive_reply(get_lead(lead['id']), reply, phase)
                     intent = result.get("intent", "OUTRO").replace("_", " ")
                     confidence = float(result.get("confidence", 0))
-                    st.success(f"Intenção detectada: {intent} · confiança {confidence:.0%}")
-                    st.markdown(f"**Próxima ação recomendada:** {result.get('next_action', '—')}")
+                    st.session_state["notice"] = f"Intenção: {intent} · confiança {confidence:.0%}. {result.get('next_action', '')}"
                     st.rerun()
                 except Exception as e:
                     st.error(f"Não foi possível interpretar a resposta: {e}")
@@ -164,7 +210,10 @@ with tabs[1]:
 
 with tabs[2]:
     st.subheader("Nova inscrição")
-    st.caption("Captação consentida de dados para comunicação relacionada ao Vigil Summit.")
+    st.caption("Ambiente de avaliação: use apenas personas fictícias e e-mail @example.invalid. Consentimento sintético fica identificado no banco.")
+    if st.button("Adicionar personas sintéticas de exemplo"):
+        seed()
+        st.rerun()
     with st.form("lead_form"):
         a, b = st.columns(2)
         name = a.text_input("Nome *")
@@ -183,12 +232,13 @@ with tabs[2]:
                 st.error("Nome, e-mail e consentimento são obrigatórios.")
             else:
                 try:
+                    synthetic = os.getenv("DEMO_MODE", "true").lower() == "true"
                     add_lead(dict(name=name, email=email, phone=phone, role=role, company=company, sector=sector,
-                                  company_size=company_size, linkedin_url=linkedin_url, security_interest=security_interest))
+                                  company_size=company_size, linkedin_url=linkedin_url, security_interest=security_interest, consent=consent, synthetic=synthetic))
                     st.success("Lead cadastrado com sucesso.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Não foi possível cadastrar: {e}")
+                    st.error(str(e) if isinstance(e, ValueError) else "Cadastro não concluído. Verifique se o e-mail já está cadastrado.")
 
 with tabs[3]:
     st.subheader("Contexto observado no evento")
@@ -200,18 +250,70 @@ with tabs[3]:
         lead = get_lead(labels[label])
         attended = st.checkbox("Compareceu ao evento", value=bool(lead['attended']))
         demo_interest = st.text_input("Interesse observado", value=lead['demo_interest'] or "dashboard de risco e compliance")
-        meeting_dt = st.text_input("Horário da reunião (quando houver)", value=lead['meeting_datetime'] or "2026-10-20 14:00")
+        meeting_dt = st.text_input("Horário da reunião (quando houver)", value=lead['meeting_datetime'] or "2026-10-20T14:00:00-03:00")
         c1, c2 = st.columns(2)
         if c1.button("Salvar contexto do evento", use_container_width=True):
-            update_lead(lead['id'], attended=int(attended), demo_interest=demo_interest, status="PRESENTE" if attended else lead['status'])
+            save_context(lead['id'], attended, demo_interest)
             st.success("Contexto salvo.")
             st.rerun()
         if c2.button("Marcar reunião agendada", type="primary", use_container_width=True):
-            update_lead(lead['id'], meeting_scheduled=1, meeting_datetime=meeting_dt, status="REUNIAO_AGENDADA")
-            st.success("Reunião marcada.")
-            st.rerun()
+            try:
+                schedule_meeting(lead['id'], meeting_dt)
+                st.session_state["notice"] = "Reunião registrada no MVP; nenhum convite externo enviado."
+                st.rerun()
+            except ValueError as e:
+                st.error(str(e))
     else:
         st.info("Cadastre um lead antes de simular o contexto pós-evento.")
 
+with tabs[4]:
+    st.subheader("Réguas por data e estado")
+    st.caption("A execução registra mensagens no canal simulado. Confirmações, recusas, opt-out e reuniões mudam a elegibilidade.")
+    event_text = st.text_input("Início do evento (ISO com fuso)", value=setting("event_at", "2026-10-20T09:00:00-03:00"))
+    auto = st.checkbox("Executar automaticamente a cada minuto enquanto a aplicação estiver ativa", value=setting("automation_enabled") == "1")
+    if st.button("Salvar configuração das réguas"):
+        try:
+            event_at = parse_date(event_text)
+            set_setting("event_at", event_at.isoformat())
+            set_setting("automation_enabled", "1" if auto else "0")
+            st.success("Configuração salva. O relógio automático usa a data real.")
+        except ValueError as e:
+            st.error(str(e))
+    offset = st.selectbox("Avançar relógio de demonstração", [-14, -7, -3, -1, 0, 1, 3, 7], format_func=lambda x: f"{'T' if x<0 else 'D'}{x:+d}")
+    if st.button("Executar etapa de demonstração"):
+        try:
+            event_at = parse_date(event_text)
+            clock = event_at + timedelta(days=offset, hours=9 if offset == 0 else 0)
+            outcome = run_due(clock, event_at, simulated=True)
+            if outcome:
+                st.dataframe(outcome, hide_index=True)
+            else:
+                st.info("Nenhuma ação elegível ou etapa já executada. O relógio simulado atua apenas sobre personas sintéticas.")
+        except ValueError as e:
+            st.error(str(e))
+    st.caption("T14/T7/T3: confirmação pendente. T1/T0: lembrete. D0: agradecimento após o evento; D1/D3/D7: follow-up, com texto distinto para ausentes. Cada janela executa uma vez por lead. O worker não permanece ativo quando o host suspende o app.")
+
+with tabs[5]:
+    st.subheader("Evidências para avaliação")
+    st.caption("Perfil declarado, fonte pública, conversas, decisões e execuções das réguas.")
+    all_leads = list_leads()
+    if all_leads:
+        chosen = st.selectbox("Lead para auditoria", [x['id'] for x in all_leads], format_func=lambda n: next(x['name'] for x in all_leads if x['id']==n))
+        selected = get_lead(chosen)
+        st.json({"tipo": "sintético" if selected["synthetic"] else "real", "origem_consentimento": selected["consent_source"], "bloqueado": bool(selected["suppressed"]), "enriquecimento": selected["enrichment_kind"], "fonte": json.loads(selected["source_json"] or "{}")})
+        st.dataframe(list_actions(chosen), hide_index=True, use_container_width=True)
+        st.dataframe(rows("SELECT * FROM deliveries WHERE lead_id=:id", {"id": chosen}), hide_index=True, use_container_width=True)
+        export = {"lead": selected, "conversas": list_interactions(chosen), "decisoes": list_actions(chosen), "execucoes": rows("SELECT * FROM deliveries WHERE lead_id=:id", {"id": chosen})}
+        st.download_button("Baixar evidências do lead (JSON)", json.dumps(export,ensure_ascii=False,indent=2), file_name="vigil-evidencias.json", mime="application/json")
+        with st.expander("Anonimizar dados deste registro"):
+            st.caption("Remove nome, contato, perfil, fontes e conteúdo das conversas/decisões. Mantém apenas contagens anônimas e bloqueia comunicações. Não é reversível.")
+            confirmed_erase = st.checkbox("Confirmo a anonimização deste registro", key=f"erase_{chosen}")
+            if st.button("Anonimizar registro", disabled=not confirmed_erase):
+                anonymize_lead(chosen)
+                st.session_state["notice"] = "Registro anonimizado e bloqueado."
+                st.rerun()
+    st.markdown("[Documentação técnica](https://github.com/jocelioxp-sketch/vigil-ai-mvp/blob/main/TECHNICAL_DOCUMENTATION.md) · [Roteiro de teste](https://github.com/jocelioxp-sketch/vigil-ai-mvp/blob/main/DEMO_SCRIPT.md)")
+
 st.divider()
-st.caption("Vigil.AI MVP · IA aplicada à conversão de eventos B2B · Dados e canais externos simulados para demonstração segura e auditável.")
+st.caption("Vigil.AI MVP · IA aplicada à conversão de eventos B2B · Versão 2 · Canal e agenda simulados; fontes públicas e decisões rastreáveis.")
+
